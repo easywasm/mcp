@@ -1,4 +1,7 @@
 // example WASM MCP that can look up weather
+
+// build: /opt/wasi-sdk/bin/clang -nostdlib -Wl,--no-entry examples/weather.c -o examples/weather.wasm
+
 #include "inc/mcp.h"
 
 // you could make something like this that returns JSON

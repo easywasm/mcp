@@ -1,6 +1,5 @@
 import os from 'node:os'
 import path from 'node:path'
-import url from 'node:url'
 import { readFile, writeFile } from 'node:fs/promises'
 import WasiPreview1 from 'easywasi'
 
@@ -32,39 +31,42 @@ export function getConfigLoc(name = '', forceSet) {
 }
 
 // Get the contents of a file/URL
-export async function getBytes(wasmName, string) {
-  let u
-  try {
-    u = new URL(wasmName)
-  } catch (e) {
-    u = url.pathToFileURL(wasmName)
-  }
-
-  if (u.protocol === 'file:') {
+export async function getBytes(url, string) {
+  if (url.protocol === 'file:') {
     if (string) {
-      return readFile(u.pathname, 'utf8')
+      return readFile(url.pathname, 'utf8')
     } else {
-      return readFile(u.pathname)
+      return readFile(url.pathname)
     }
   } else {
     if (string) {
-      return fetch(u).then((r) => r.text())
+      return fetch(url).then((r) => r.text())
     } else {
-      return fetch(u).then((r) => r.arrayBuffer())
+      return fetch(url).then((r) => r.arrayBuffer())
     }
   }
 }
 
-export function getString(instance, address, maxLen) {}
+// get a string by pointer from the memory
+export function getString(instance, address, maxLen=1024) {
+  let len = 0
+  let str = ''
+  while (len < maxLen) {
+    const char = instance.memory.getUint8(address + len)
+    if (char === 0) break
+    str += String.fromCharCode(char)
+    len++
+  }
+  return str
+}
 
-// This will return an instance of the wasm, all ready to go
-export async function getMcp(wasmName, info = {}, envOverride = {}) {
-  const bytes = await getBytes(wasmName)
-  const env = {
+export async function getMcp({ url, info = {}, bytes }, envOverride = {}) {
+  const wasmBytes = new Uint8Array(bytes)
+  const env =  {
     ...envOverride
   }
   const wasi_snapshot_preview1 = new WasiPreview1()
-  const i = await WebAssembly.instantiate(bytes, { env, wasi_snapshot_preview1 })
+  const i = await WebAssembly.instantiate(wasmBytes, { env, wasi_snapshot_preview1 })
 
   // easywasi currently has a bug where setup() doesn't work
   wasi_snapshot_preview1.setup({ memory: i.instance.exports.memory })
@@ -77,9 +79,9 @@ export async function getMcp(wasmName, info = {}, envOverride = {}) {
     i.instance.exports._start()
   }
 
+  // if there is an mcp export, use that to get info instead (for embedded JSON info)
   if (i.instance.exports.mcp) {
     info = JSON.parse(getString(i.instance.exports, i.instance.exports.mcp(), 1024))
   }
-
-  return { ...i.instance.exports, info, bytes }
+  return { ...i.instance.exports, info }
 }
