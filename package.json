@@ -13,8 +13,10 @@
   },
   "description": "MCP runtime for LLMs that can load wasm MCP servers.",
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.9.0",
     "easywasi": "^0.0.6",
     "mkdirp": "^3.0.1",
-    "yargs": "^17.7.2"
+    "yargs": "^17.7.2",
+    "zod": "^3.24.2"
   }
 }
