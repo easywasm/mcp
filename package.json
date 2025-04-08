@@ -1,0 +1,20 @@
+{
+  "name": "wasm-mcp",
+  "version": "0.0.0",
+  "type": "module",
+  "author": "konsumer",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test",
+    "build:weather": "/opt/wasi-sdk/bin/clang -nostdlib -Wl,--no-entry examples/weather.c -o examples/weather.wasm"
+  },
+  "bin": {
+    "wasm-mcp": "wasm-mcp.mjs"
+  },
+  "description": "MCP runtime for LLMs that can load wasm MCP servers.",
+  "dependencies": {
+    "easywasi": "^0.0.6",
+    "mkdirp": "^3.0.1",
+    "yargs": "^17.7.2"
+  }
+}
