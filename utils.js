@@ -7,6 +7,7 @@ import WasiPreview1 from 'easywasi'
 export function getConfigLoc(name = '', forceSet) {
   const homeDir = os.homedir()
 
+  // this allows user to override dir, and optionally use ~ as "home"
   if (forceSet) {
     return forceSet.replace(new RegExp('^~', 'g'), homeDir)
   }
@@ -48,7 +49,7 @@ export async function getBytes(url, string) {
 }
 
 // get a string by pointer from the memory
-export function getString(instance, address, maxLen=1024) {
+function getString(instance, address, maxLen=1024) {
   let len = 0
   let str = ''
   while (len < maxLen) {
@@ -60,9 +61,11 @@ export function getString(instance, address, maxLen=1024) {
   return str
 }
 
+// this instantiates the wasm MCP and gets info from it (or returns the info you pass to it)
 export async function getMcp({ url, info = {}, bytes }, envOverride = {}) {
   const wasmBytes = new Uint8Array(bytes)
   const env =  {
+    // TODO: add some HTTP stuff here and maybe JSON parsing stuff
     ...envOverride
   }
   const wasi_snapshot_preview1 = new WasiPreview1()
@@ -84,4 +87,146 @@ export async function getMcp({ url, info = {}, bytes }, envOverride = {}) {
     info = JSON.parse(getString(i.instance.exports, i.instance.exports.mcp(), 1024))
   }
   return { ...i.instance.exports, info }
+}
+
+
+// return tool-handler function for a tool
+export function wasmHandleTool(wasm, tool) {
+  const { name, inputSchema, outputSchema = {type: 'string'} } = tool
+
+  const func = wasm[tool.name]
+  if (!func) {
+    throw new Error(`${tool.name} not found in wasm.`)
+  }
+
+  const errorPointer = wasm.get_error_pointer()
+
+  // this is the MCP handler function, args is an object
+  return async (args = {}) => {
+    const funcargs = []
+
+    // Process arguments according to inputSchema
+    if (inputSchema && inputSchema.properties) {
+      // Check for required fields
+      if (inputSchema.required) {
+        for (const requiredField of inputSchema.required) {
+          if (args[requiredField] === undefined) {
+            return {
+              content: [{
+                type: "text",
+                text: `Error: Missing required field '${requiredField}'`
+              }],
+              isError: true
+            };
+          }
+        }
+      }
+
+      // Process each property from inputSchema
+      for (const [propName, propSchema] of Object.entries(inputSchema.properties)) {
+        if (args[propName] !== undefined) {
+          // Validate type and convert to appropriate WASM argument
+          switch (propSchema.type) {
+            case 'string':
+              // For strings, we need to allocate memory in WASM and pass a pointer
+              const strPtr = wasm.allocate_string(args[propName]);
+              funcargs.push(strPtr);
+              break;
+            case 'number':
+            case 'integer':
+              if (typeof args[propName] !== 'number') {
+                try {
+                  // Try to convert string to number if possible
+                  const num = Number(args[propName]);
+                  if (isNaN(num)) throw new Error();
+                  funcargs.push(num);
+                } catch {
+                  return {
+                    content: [{
+                      type: "text",
+                      text: `Error: Field '${propName}' must be a number`
+                    }],
+                    isError: true
+                  };
+                }
+              } else {
+                funcargs.push(args[propName]);
+              }
+              break;
+            case 'boolean':
+              funcargs.push(Boolean(args[propName]) ? 1 : 0);
+              break;
+            case 'object':
+            case 'array':
+              // For complex types, serialize to JSON and pass as string
+              const jsonStr = JSON.stringify(args[propName]);
+              const jsonPtr = wasm.allocate_string(jsonStr);
+              funcargs.push(jsonPtr);
+              break;
+            default:
+              return {
+                content: [{
+                  type: "text",
+                  text: `Error: Unsupported type '${propSchema.type}' for field '${propName}'`
+                }],
+                isError: true
+              };
+          }
+        } else if (inputSchema.required && inputSchema.required.includes(propName)) {
+          // This should be caught earlier, but adding as an extra check
+          return {
+            content: [{
+              type: "text",
+              text: `Error: Missing required field '${propName}'`
+            }],
+            isError: true
+          };
+        }
+      }
+
+      // Check for unexpected arguments
+      for (const argName of Object.keys(args)) {
+        if (!inputSchema.properties[argName]) {
+          // Optional: either ignore or return error for unexpected arguments
+          console.warn(`Unexpected argument '${argName}' passed to ${tool.name}`);
+        }
+      }
+    }
+
+    funcargs.push(errorPointer);
+
+    // reset error pointer to 0
+    wasm.memory.setInt32(errorPointer, 0);
+
+    // call wasm function
+    const output = func(...funcargs);
+
+    if (wasm.memory.getInt32(errorPointer) !== 0) {
+      const msg = output === 0 ? `${tool.name} call failed` : getString(wasm, output, 1024);
+      return {
+        content: [{
+          type: "text",
+          text: `Error: ${msg}`
+        }],
+        isError: true
+      };
+    }
+
+    if (outputSchema?.type === 'number') {
+      return {
+        content: [{
+          type: "text",
+          text: output.toString()
+        }]
+      };
+    }
+
+    // this will handle JSON and string
+    return {
+      content: [{
+        type: "text",
+        text: getString(wasm, output)
+      }]
+    };
+  };
 }

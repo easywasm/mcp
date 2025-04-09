@@ -6,15 +6,11 @@ import { writeFile } from 'node:fs/promises'
 import { mkdirp } from 'mkdirp'
 import yargs from 'yargs'
 import { hideBin } from 'yargs/helpers'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 
-import { getConfigLoc, getMcp, getBytes } from './utils.js'
+import { getConfigLoc, getMcp, getBytes, wasmHandleTool } from './utils.js'
 
 // this allows user to override with a value like `~/.config/whatever.json`
 const DIR_WASM_MCP_CONFIG_FILE = getConfigLoc('wasm-mcp.json', process.env.DIR_WASM_MCP_CONFIG_FILE)
@@ -28,35 +24,6 @@ try {
   cache = r.cache
   settings = r.settings
 } catch (e) {}
-
-// this will setup the MCP server using '@modelcontextprotocol/sdk
-async function setupServer({ info, memory, ...callbacks}) {
-  const { tools, ...descriptor} = info
-  const server = new Server(
-    descriptor,
-    {
-      capabilities: {
-        tools: {},
-      },
-    }
-  )
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return { tools }
-  })
-
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const { name, arguments: args } = request.params;
-    const f = callbacks[name]
-    if (!f) throw new Error(`No callback for ${name}`)
-    // TODO: actually call the function
-    // see https://github.com/hideya/mcp-server-weather-js/blob/main/src/index.ts
-  })
-
-
-  return server
-}
-
 
 const argv = yargs(hideBin(process.argv))
   .help()
@@ -96,9 +63,18 @@ const argv = yargs(hideBin(process.argv))
       }
 
       const wasm = await getMcp(cache[u.toString()])
-      const server = await setupServer(wasm)
+      const { memory, info: { name, version, tools=[] }, ...callbacks } = wasm
+      const server = new McpServer({ name, version })
+
+      const errorPointer = wasm.get_error_pointer();
+
+      // TODO: also handle resources (see https://github.com/modelcontextprotocol/typescript-sdk)
+
+      for (const tool of tools) {
+        server.tool(tool.name, tool.inputSchema, wasmHandleTool(wasm, tool))
+      }
+      console.error(`${wasm.info.name} ${wasm.info.version} MCP Server running on stdio`);
       const transport = new StdioServerTransport()
       await server.connect(transport)
-      console.error(`${wasm.info.name} ${wasm.info.version} MCP Server running on stdio`);
     }
   ).argv

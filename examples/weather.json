@@ -1,5 +1,5 @@
 {
-  "name": "Weather",
+  "name": "weather",
   "version": "0.0.0",
   "tools": [
     {
@@ -14,6 +14,9 @@
           }
         },
         "required": ["state"]
+      },
+      "outputSchema": {
+        "type": "string"
       }
     },
     {
@@ -32,6 +35,9 @@
           }
         },
         "required": ["latitude", "longitude"]
+      },
+      "outputSchema": {
+        "type": "string"
       }
     }
   ]
