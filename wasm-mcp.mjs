@@ -37,8 +37,18 @@ const argv = yargs(hideBin(process.argv))
         type: 'boolean',
         description: "Don't use the cache"
       })
+      y.option('allow-http', {
+        alias: 'n',
+        type: 'boolean',
+        description: "Allow MCP to make HTTP calls"
+      })
+      y.option('allow-fs', {
+        alias: 'n',
+        type: 'boolean',
+        description: "Allow MCP to have full filesystem access (rather than just it's own scratch-space)"
+      })
     },
-    async ({ WASM_LOCATION, noCache }) => {
+    async ({ WASM_LOCATION, noCache, allowHttp, allowFs }) => {
       let u
       try {
         u = new URL(WASM_LOCATION)
@@ -62,8 +72,8 @@ const argv = yargs(hideBin(process.argv))
         }
       }
 
-      const wasm = await getMcp(cache[u.toString()])
-      const { memory, info: { name, version, tools=[] }, ...callbacks } = wasm
+      const wasm = await getMcp(u.toString(), { ...cache[u.toString()], allowHttp, allowFs})
+      const { memory, info: { name, version, tools=[] }, malloc, free, ...callbacks } = wasm
       const server = new McpServer({ name, version })
 
       const errorPointer = wasm.get_error_pointer();

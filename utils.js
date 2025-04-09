@@ -48,39 +48,46 @@ export async function getBytes(url, string) {
   }
 }
 
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
 // get a string by pointer from the memory
 function getString(instance, address, maxLen=1024) {
-  let len = 0
-  let str = ''
-  while (len < maxLen) {
-    const char = instance.memory.getUint8(address + len)
-    if (char === 0) break
-    str += String.fromCharCode(char)
-    len++
+  let end = address;
+  const memory = new Uint8Array(instance.memory.buffer);
+  while (end < address + maxLen && memory[end] !== 0) {
+    end++;
   }
-  return str
+  const bytes = memory.subarray(address, end);
+  return decoder.decode(bytes);
+}
+
+// lower a string to wasm
+function setString(instance, value) {
+  const bytes = encoder.encode(value);
+  const p = instance.malloc(bytes.length + 1);
+  const memory = new Uint8Array(instance.memory.buffer);
+  for (let i = 0; i < bytes.length; i++) {
+    memory[p + i] = bytes[i];
+  }
+  memory[p + bytes.length] = 0;
+  return p;
 }
 
 // this instantiates the wasm MCP and gets info from it (or returns the info you pass to it)
-export async function getMcp({ url, info = {}, bytes }, envOverride = {}) {
+export async function getMcp(url, { allowHttp, allowFs, info = {}, bytes }, envOverride = {}) {
   const wasmBytes = new Uint8Array(bytes)
   const env =  {
-    // TODO: add some HTTP stuff here and maybe JSON parsing stuff
+    // TODO: add some HTTP stuff here and maybe JSON parsing stuff, obey allowHttp/allowFs
     ...envOverride
   }
   const wasi_snapshot_preview1 = new WasiPreview1()
   const i = await WebAssembly.instantiate(wasmBytes, { env, wasi_snapshot_preview1 })
 
-  // easywasi currently has a bug where setup() doesn't work
-  wasi_snapshot_preview1.setup({ memory: i.instance.exports.memory })
-  let retval = -1
-
-  if (i.instance.exports._initialize) {
-    i.instance.exports._initialize()
-  }
-  if (i.instance.exports._start) {
-    i.instance.exports._start()
-  }
+  // easywasi currently has a bug where start() doesn't work
+  wasi_snapshot_preview1.setup(i.instance.exports)
+  i.instance.exports._initialize && i.instance.exports._initialize()
+  i.instance.exports._start &&  i.instance.exports._start()
 
   // if there is an mcp export, use that to get info instead (for embedded JSON info)
   if (i.instance.exports.mcp) {
@@ -104,6 +111,8 @@ export function wasmHandleTool(wasm, tool) {
   // this is the MCP handler function, args is an object
   return async (args = {}) => {
     const funcargs = []
+
+    const pointersToFree = []
 
     // Process arguments according to inputSchema
     if (inputSchema && inputSchema.properties) {
@@ -129,7 +138,8 @@ export function wasmHandleTool(wasm, tool) {
           switch (propSchema.type) {
             case 'string':
               // For strings, we need to allocate memory in WASM and pass a pointer
-              const strPtr = wasm.allocate_string(args[propName]);
+              const strPtr = setString(wasm,args[propName]);
+              pointersToFree.push(strPtr)
               funcargs.push(strPtr);
               break;
             case 'number':
@@ -160,7 +170,8 @@ export function wasmHandleTool(wasm, tool) {
             case 'array':
               // For complex types, serialize to JSON and pass as string
               const jsonStr = JSON.stringify(args[propName]);
-              const jsonPtr = wasm.allocate_string(jsonStr);
+              const jsonPtr = setString(wasm,jsonStr);
+              pointersToFree.push(strPtr)
               funcargs.push(jsonPtr);
               break;
             default:
@@ -200,6 +211,11 @@ export function wasmHandleTool(wasm, tool) {
 
     // call wasm function
     const output = func(...funcargs);
+
+    // call free() on all funcargs that are allocated pointers (strings)
+    for (const p of pointersToFree) {
+      wasm.free(p)
+    }
 
     if (wasm.memory.getInt32(errorPointer) !== 0) {
       const msg = output === 0 ? `${tool.name} call failed` : getString(wasm, output, 1024);

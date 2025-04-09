@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test",
-    "build:weather": "/opt/wasi-sdk/bin/clang -nostdlib -Wl,--no-entry examples/weather.c -o examples/weather.wasm"
+    "build:weather": "/opt/wasi-sdk/bin/clang -mexec-model=reactor examples/weather.c -o examples/weather.wasm"
   },
   "bin": {
     "wasm-mcp": "wasm-mcp.mjs"
