@@ -9,19 +9,12 @@
 // WASM_EXPORT(mcp) char* mcp() {}
 
 // These are the MCP tool callbacks
+// they return status (0=ok, non-0=pointer-to-error-message)
 
-// They can return these things (depending on how it's setup in weather.json)
-//   - an integer (for number output)
-//   - a plain string pointer (for string output)
-//   - a JSON string pointer (for object output)
-//   - for an error, set errorPointer to non-0 and return string-pointer for message
-
-WASM_EXPORT(get_alerts) char* get_alerts(char* state, int* errorPointer) {
-  *errorPointer = 1;
-  return "Not implemented";
+WASM_EXPORT(get_alerts) int get_alerts(char* state, char* output, int* outputLen) {
+  return mcp_set_error("Not implemented");
 }
 
-WASM_EXPORT(get_forecast) char* get_forecast(int latitude, int longitude, int* errorPointer) {
-  *errorPointer = 1;
-  return "Not implemented";
+WASM_EXPORT(get_forecast) int get_forecast(int latitude, int longitude, char* output, int* outputLen) {
+  return mcp_set_error("Not implemented");
 }
