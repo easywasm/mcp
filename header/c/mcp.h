@@ -63,3 +63,14 @@ WASM_EXPORT(mcp_set_input) void mcp_set_input(const char* message) {
   strncpy(_mcp_input_buffer, message, sizeof(_mcp_input_buffer) - 1);
   _mcp_input_buffer[sizeof(_mcp_input_buffer) - 1] = '\0';
 }
+
+// Helper function to output text to the MCP output buffer
+void mcp_output_text(char* message, bool isError) {
+    char* output = malloc(strlen(message) + 20);
+    if (isError){
+        sprintf(output, "{\"content\":[{\"type\":\"ErrorResponse\",\"isError\": true,\"detail\":\"%s\"}]}", message);
+    }else{
+        sprintf(output, "{\"content\":[{\"type\":\"text\",\"text\":\"%s\"}]}", message);
+    }
+    mcp_set_output(output);
+}
