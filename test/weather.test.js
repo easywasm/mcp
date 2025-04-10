@@ -28,11 +28,11 @@ test('basic load', async ({ assert }) => {
 test('calls get_alerts->http_get', async ({ assert }) => {
   const wasm = await wasmLoader(bytes)
   const r = await callMcp(wasm, 'get_alerts', { state: 'OR' })
-  console.log(r)
+  // console.log(r)
 })
 
 test('calls get_forecast->http_get', async ({ assert }) => {
   const wasm = await wasmLoader(bytes)
   const r = await callMcp(wasm, 'get_forecast', { latitude: 45.512230, longitude: -122.658722 })
-  console.log(r)
+  // console.log(r)
 })
