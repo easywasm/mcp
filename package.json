@@ -6,17 +6,24 @@
   "license": "MIT",
   "scripts": {
     "test": "node --test",
-    "build:weather": "/opt/wasi-sdk/bin/clang -mexec-model=reactor examples/weather.c -o examples/weather.wasm"
+    "build:weather": "/opt/wasi-sdk/bin/clang -mexec-model=reactor -I node_modules/@easywasm/promises -I header/c examples/weather.c examples/parson.c -o examples/weather.wasm",
+    "build": "npm run build:weather",
+    "pretest": "npm run build",
+    "lint": "npx -y prettier --write ."
   },
   "bin": {
-    "wasm-mcp": "wasm-mcp.mjs"
+    "wasm-mcp": "src/wasm-mcp.mjs"
   },
   "description": "MCP runtime for LLMs that can load wasm MCP servers.",
   "dependencies": {
+    "@easywasm/memory": "^0.0.3",
+    "@easywasm/wasi": "^0.0.8",
     "@modelcontextprotocol/sdk": "^1.9.0",
-    "easywasi": "^0.0.6",
     "mkdirp": "^3.0.1",
     "yargs": "^17.7.2",
     "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@easywasm/promises": "^0.0.2"
   }
 }

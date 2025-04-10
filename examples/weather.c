@@ -1,20 +1,48 @@
 // example WASM MCP that can look up weather
 
-// build: /opt/wasi-sdk/bin/clang -nostdlib -Wl,--no-entry examples/weather.c -o examples/weather.wasm
+// build: /opt/wasi-sdk/bin/clang -mexec-model=reactor -I node_modules/@easywasm/promises -I header/c examples/weather.c examples/parson.c -o examples/weather.wasm
 
-#include "inc/mcp.h"
+#include <stdio.h>
+#include <string.h>
 
-// you could make something like this that returns JSON
-// but I think it's nicer to make a JSON file alongside it
-// WASM_EXPORT(mcp) char* mcp() {}
+#include "mcp.h"
+#include "parson.h"
 
-// These are the MCP tool callbacks
-// they return status (0=ok, non-0=pointer-to-error-message)
-
-WASM_EXPORT(get_alerts) int get_alerts(char* state, char* output, int* outputLen) {
-  return mcp_set_error("Not implemented");
+void get_alerts_callback(void* alertJSONString) {
+    // TODO: parse JSON and extract relevant information
+    // TODO: output the alerts to the MCP output
+    char buffer[100] = {};
+    printf("%s", (char*)alertJSONString);
+    sprintf(buffer, "Alerts retrieved: %lu", strlen(alertJSONString));
+    mcp_set_output(buffer);
 }
 
-WASM_EXPORT(get_forecast) int get_forecast(int latitude, int longitude, char* output, int* outputLen) {
-  return mcp_set_error("Not implemented");
+void get_forecast_callback(void* forecastJSONString) {
+    // TODO: parse JSON and extract relevant information
+    // TODO: output the forecast to the MCP output
+    char buffer[100] = {};
+    printf("%s", (char*)forecastJSONString);
+    sprintf(buffer, "Forecast retrieved: %lu", strlen(forecastJSONString));
+    mcp_set_output(buffer);
+}
+
+WASM_EXPORT(get_alerts) int get_alerts() {
+    JSON_Value* input = json_parse_string(mcp_get_input());
+    const char* state = json_object_get_string(json_object(input), "state");
+    json_value_free(input);
+    char url[60] = {};
+    sprintf(url, "https://api.weather.gov/alerts/active?area=%s", state);
+    wasm_promise_callbacks_register(http_get(url), get_alerts_callback);
+    return 0;
+}
+
+WASM_EXPORT(get_forecast) int get_forecast() {
+    JSON_Value* input = json_parse_string(mcp_get_input());
+    const double latitude = json_object_get_number(json_object(input), "latitude");
+    const double longitude = json_object_get_number(json_object(input), "longitude");
+    json_value_free(input);
+    char url[60] = {};
+    sprintf(url, "https://api.weather.gov/points/%f,%f", latitude, longitude);
+    wasm_promise_callbacks_register(http_get(url), get_forecast_callback);
+    return 0;
 }
