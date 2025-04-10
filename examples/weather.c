@@ -8,21 +8,23 @@
 #include "mcp.h"
 #include "parson.h"
 
-void get_alerts_callback(void* alertJSONString) {
+void get_alerts_callback(void* a) {
+    char* alertJSONString = (char*)a;
+
     // TODO: parse JSON and extract relevant information
     // TODO: output the alerts to the MCP output
-    char buffer[100] = {};
-    printf("%s", (char*)alertJSONString);
-    sprintf(buffer, "Alerts retrieved: %lu", strlen(alertJSONString));
+    char buffer[1024*1024] = {};
+    sprintf(buffer, "Alerts retrieved: %lu: %s", strlen(alertJSONString), alertJSONString);
     mcp_set_output(buffer);
 }
 
-void get_forecast_callback(void* forecastJSONString) {
+void get_forecast_callback(void* a) {
+    char* forecastJSONString = (char*)a;
+
     // TODO: parse JSON and extract relevant information
     // TODO: output the forecast to the MCP output
-    char buffer[100] = {};
-    printf("%s", (char*)forecastJSONString);
-    sprintf(buffer, "Forecast retrieved: %lu", strlen(forecastJSONString));
+    char buffer[1024*10] = {};
+    sprintf(buffer, "Forecast retrieved: %lu: %s", strlen(forecastJSONString), forecastJSONString);
     mcp_set_output(buffer);
 }
 

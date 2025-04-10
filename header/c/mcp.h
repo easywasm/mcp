@@ -36,7 +36,7 @@ WASM_EXPORT(mcp_get_error) char* mcp_get_error() {
     return _mcp_error_buffer;
 }
 
-static char  _mcp_output_buffer[1024] = {0};
+static char  _mcp_output_buffer[1024*10] = {0};
 
 WASM_EXPORT(mcp_get_output) char* mcp_get_output() {
     return _mcp_output_buffer;
